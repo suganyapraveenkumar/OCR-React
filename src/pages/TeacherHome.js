@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import './TeacherHome.css';
 
 const TeacherHome = () => {
   const location = useLocation();
@@ -12,22 +13,30 @@ const TeacherHome = () => {
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedSubject, setSelectedSubject] = useState("");
   const [studentDocs, setStudentDocs] = useState([]);
+  const [modelFile, setModelFile] = useState(null);
+  const [studentFile, setStudentFile] = useState(null);
+  const [sampleFile, setSampleFile] = useState(null);
+  const [samplePreview, setSamplePreview] = useState(null);
+  const [filePreviewType, setFilePreviewType] = useState(null);
+const [results, setResults] = useState([]);
+
+  const [evaluationResults, setEvaluationResults] = useState([]);
 
   useEffect(() => {
     if (!userId) return;
 
     fetch(`http://localhost:5000/api/teacher/profile/${userId}`)
-      .then((res) => res.json())
-      .then((data) => setTeacher(data))
+      .then(res => res.json())
+      .then(data => setTeacher(data))
       .catch(console.error);
 
     fetch(`http://localhost:5000/api/teacher/categories`)
-      .then((res) => res.json())
+      .then(res => res.json())
       .then(setCategories)
       .catch(console.error);
 
-    fetch(`http://localhost:5000/api/teacher/Subjects`)
-      .then((res) => res.json())
+    fetch(`http://localhost:5000/api/teacher/subjects`)
+      .then(res => res.json())
       .then(setSubjects)
       .catch(console.error);
   }, [userId]);
@@ -37,31 +46,108 @@ const TeacherHome = () => {
       fetch(
         `http://localhost:5000/api/teacher/studentDocs?category=${selectedCategory}&subject=${selectedSubject}`
       )
-        .then((res) => res.json())
+        .then(res => res.json())
         .then(setStudentDocs)
         .catch(console.error);
     }
   }, [selectedCategory, selectedSubject]);
 
-  const handleEvaluation = () => {
-    navigate("/evaluation", {
-      state: {
-        userId,
-        category: selectedCategory,
-        subject: selectedSubject,
-      },
-    });
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    setSampleFile(file);
+    setSamplePreview(null);
+    setFilePreviewType(null);
+
+    if (!file) return;
+
+    const fileType = file.type;
+
+    if (fileType.startsWith("image/")) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setSamplePreview(reader.result);
+        setFilePreviewType("image");
+      };
+      reader.readAsDataURL(file);
+    } else if (fileType === "application/pdf") {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setSamplePreview(reader.result);
+        setFilePreviewType("pdf");
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setSamplePreview(null);
+      setFilePreviewType(null);
+    }
   };
+
+  const handleSampleUpload = async () => {
+    if (!sampleFile || !selectedSubject || !selectedCategory) {
+      alert("Please select a subject and category before uploading.");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", sampleFile);
+    formData.append("subjectId", selectedSubject);
+    formData.append("categoryId", selectedCategory);
+
+    try {
+      const res = await fetch("http://localhost:5000/api/Teacher/upload-sample", {
+        method: "POST",
+        body: formData,
+      });
+
+      const result = await res.json();
+      if (res.ok) {
+        alert("Sample uploaded successfully");
+        setSampleFile(null);
+        setSamplePreview(null);
+        setFilePreviewType(null);
+      } else {
+        alert(result.message || "Upload failed");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Upload failed");
+    }
+  };
+
+  
+const formData = new FormData();
+    formData.append("studentFile", studentFile);
+    formData.append("modelFile", modelFile);
+  const fetchEvaluationResults = () => {
+  fetch(
+    `http://localhost:5000/api/upload/evaluate?studentId=${userId}&subjectId=${selectedSubject}&categoryId=${selectedCategory}`,
+    {
+      method: 'POST',
+      body: formData,
+      // Don't set 'Content-Type' when using FormData — the browser sets it correctly
+    }
+  )
+    .then(res => res.json())
+    .then(data => setResults(data))
+    .catch(err => console.error("Error fetching results:", err));
+};
+
+
+  useEffect(() => {
+    if (selectedCategory && selectedSubject) {
+      fetchEvaluationResults();
+    }
+  }, [selectedCategory, selectedSubject]);
 
   return (
     <div className="p-6 max-w-4xl mx-auto bg-white rounded shadow">
       <h1 className="text-2xl font-bold mb-4">
-        Welcome, {teacher.TeacherName || "Teacher"}
+        Welcome, {teacher.teacherName || "Teacher"}
       </h1>
 
       <div className="mb-4">
-        <p><strong>Email:</strong> {teacher.EmailAddress}</p>
-        <p><strong>Designation:</strong> {teacher.Designation}</p>
+        <p><strong>Email:</strong> {teacher.emailAddress}</p>
+        <p><strong>Designation:</strong> {teacher.designation}</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -72,8 +158,8 @@ const TeacherHome = () => {
         >
           <option value="">Select Category</option>
           {categories.map((cat) => (
-            <option key={cat.id} value={cat.id}>
-              {cat.name}
+            <option key={cat.categoryId} value={cat.categoryId}>
+              {cat.categoryName}
             </option>
           ))}
         </select>
@@ -85,54 +171,62 @@ const TeacherHome = () => {
         >
           <option value="">Select Subject</option>
           {subjects.map((sub) => (
-            <option key={sub.id} value={sub.id}>
-              {sub.name}
+            <option key={sub.subjectId} value={sub.subjectId}>
+              {sub.subjectName}
             </option>
           ))}
         </select>
       </div>
 
-      <h2 className="text-xl font-semibold mb-3">Student Uploaded Documents</h2>
-      <div className="grid grid-cols-1 gap-3">
-        {studentDocs.length === 0 ? (
-          <p>No documents uploaded for this selection.</p>
-        ) : (
-          studentDocs.map((doc, idx) => (
-            <div key={idx} className="border p-3 rounded shadow">
-              <p><strong>Student:</strong> {doc.studentName}</p>
-              <p><strong>Uploaded On:</strong> {new Date(doc.uploadedAt).toLocaleString()}</p>
-              <img
-                src={doc.fileUrl}
-                alt="student-doc"
-                className="w-48 mt-2 border"
-              />
-            </div>
-          ))
+      
+      
+
+      <div className="mt-6">
+        <h2 className="text-xl font-semibold mb-3"> Uploaded Answer Key</h2>
+
+        <input type="file" onChange={handleFileChange} className="mb-2" />
+
+        {samplePreview && filePreviewType === "image" && (
+          <div className="mt-4">
+            <h3 className="text-lg font-medium">Preview of Selected Image:</h3>
+            <img src={samplePreview} alt="Uploaded Sample" className="w-64 mt-2 border" />
+          </div>
         )}
+
+        {samplePreview && filePreviewType === "pdf" && (
+          <div className="mt-4">
+            <h3 className="text-lg font-medium">Preview of Selected PDF:</h3>
+            <embed src={samplePreview} type="application/pdf" width="600" height="400" />
+          </div>
+        )}
+
+        {!samplePreview && sampleFile && filePreviewType === null && (
+          <div className="mt-4">
+            <p>
+              Selected File: <strong>{sampleFile.name}</strong><br />
+              (Preview not available for this file type)
+            </p>
+          </div>
+        )}
+
+        <button
+          onClick={handleSampleUpload}
+          className="mt-4 bg-green-600 text-white px-4 py-2 rounded"
+        >
+          Submit
+        </button>
       </div>
 
-      <div className="flex gap-4 mt-6">
-        <button
-          onClick={() =>
-            navigate("/upload-sample", {
-              state: {
-                userId,
-                category: selectedCategory,
-                subject: selectedSubject,
-              },
-            })
-          }
-          className="bg-green-600 text-white px-4 py-2 rounded"
+      <div >
+        <h2 >View and Evaluation Results</h2>
+         <button
+          onClick={() => navigate(`/EvaluationResult`)}
+         
+          
         >
-          Upload Sample Answer Sheet
+          Evaluation
         </button>
-
-        <button
-          onClick={handleEvaluation}
-          className="bg-blue-600 text-white px-4 py-2 rounded"
-        >
-          View Evaluation Results
-        </button>
+       
       </div>
     </div>
   );

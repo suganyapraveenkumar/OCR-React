@@ -10,9 +10,9 @@ const StudentHome = () => {
   const [student, setStudent] = useState({});
   const [category, setCategory] = useState('');
   const [subject, setSubject] = useState('');
-  const [modelFile, setModelFile] = useState(null);
   const [studentFile, setStudentFile] = useState(null);
-
+  const [samplePreview, setSamplePreview] = useState(null);
+  const [filePreviewType, setFilePreviewType] = useState(null);
   // These should match your DB Subject/Category names exactly
   const categories = [
     { id: 1, name: "Homework" },
@@ -39,17 +39,41 @@ const StudentHome = () => {
     }
   }, [userId]);
 
-  const handleStudentFileChange = (e) => {
+  
+  
+ const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    
+    setSamplePreview(null);
+    setFilePreviewType(null);
     setStudentFile(e.target.files[0]);
-  };
+    if (!file) return;
 
-  const handleModelFileChange = (e) => {
-    setModelFile(e.target.files[0]);
+    const fileType = file.type;
+
+    if (fileType.startsWith("image/")) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setSamplePreview(reader.result);
+        setFilePreviewType("image");
+      };
+      reader.readAsDataURL(file);
+    } else if (fileType === "application/pdf") {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setSamplePreview(reader.result);
+        setFilePreviewType("pdf");
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setSamplePreview(null);
+      setFilePreviewType(null);
+    }
   };
 
   const handleSubmit = async () => {
-    if (!studentFile || !modelFile || !subject || !category) {
-      alert('Please select subject, category, and upload both files.');
+    if (!studentFile || !subject || !category) {
+      alert('Please select subject, category, and upload files.');
       return;
     }
 
@@ -62,23 +86,26 @@ const StudentHome = () => {
     }
 
     const formData = new FormData();
-    formData.append("studentFile", studentFile);
-    formData.append("modelFile", modelFile);
+formData.append("studentId", userId);
+formData.append("subjectId", subjectId);
+formData.append("categoryId", categoryId);
+formData.append("file", studentFile); 
 
-    try {
-      const response = await axios.post(
-        `http://localhost:5000/api/upload/evaluate?studentId=${userId}&subjectId=${subjectId}&categoryId=${categoryId}`,
-        formData,
-        {
-          headers: {
-            'Content-Type': 'multipart/form-data'
-          }
-        }
-      );
+try {
+  const response = await axios.post(
+    "http://localhost:5000/api/student/upload",
+    formData,
+    {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    }
+  );
+    
 
-      alert('Evaluation successful!');
+      alert('upload successful!');
       setStudentFile(null);
-      setModelFile(null);
+      
       setCategory('');
       setSubject('');
     } catch (error) {
@@ -91,32 +118,32 @@ const StudentHome = () => {
     <div className="max-w-3xl mx-auto mt-8 p-6 shadow-lg rounded-lg bg-white">
       <div className="bg-white shadow-md rounded p-4 mb-6">
         <h3 className="text-lg font-medium mb-2">Profile Details</h3>
-        <div><strong>Roll No:</strong> {student.studentId}</div>
-        <div><strong>Name:</strong> {student.studentName}</div>
+        <div><strong>Roll No:</strong> {student.StudentId}</div>
+        <div><strong>Name:</strong> {student.StudentName}</div>
         <div><strong>Class:</strong> {student.class}</div>
-        <div><strong>Section:</strong> {student.section}</div>
+        <div><strong>Section:</strong> {student.Section}</div>
         <div><strong>Address:</strong> {student.address}</div>
       </div>
 
-      <h3 className="text-xl font-semibold mt-6 mb-2">Upload Answer Sheet</h3>
+      
 
-      <div className="mb-4">
+      <div className="form-group">
         <label className="block mb-1">Category:</label>
         <select
           value={category}
           onChange={(e) => setCategory(e.target.value)}
-          className="border px-3 py-2 w-full"
+          
         >
           <option value="">-- Select Category --</option>
           {categories.map((cat) => (
             <option key={cat.id} value={cat.name}>{cat.name}</option>
           ))}
         </select>
-      </div>
+      {/* </div>
 
-      <div className="mb-4">
-        <label className="block mb-1">Subject:</label>
-        <select
+      <div className="mb-4"> */}
+        <label  >Subject:</label>
+        <select 
           value={subject}
           onChange={(e) => setSubject(e.target.value)}
           className="border px-3 py-2 w-full"
@@ -129,21 +156,45 @@ const StudentHome = () => {
       </div>
 
       <div className="mb-4">
-        <label className="block mb-1">Upload Student Answer File (PDF/Doc):</label>
-        <input type="file" onChange={handleStudentFileChange} className="border px-3 py-2 w-full" />
+        <label className="block mb-1">Upload Answer File (PDF/Doc):</label>
+        <input type="file" onChange={handleFileChange} className="border px-3 py-2 w-full" />
       </div>
 
-      <div className="mb-4">
-        <label className="block mb-1">Upload Model Answer File:</label>
-        <input type="file" onChange={handleModelFileChange} className="border px-3 py-2 w-full" />
+      <div className="mt-6">
+        
+
+        {samplePreview && filePreviewType === "image" && (
+          <div className="mt-4">
+            <h3 className="text-lg font-medium">Preview of Selected Image:</h3>
+            <img src={samplePreview} alt="Uploaded Sample" className="w-64 mt-2 border" />
+          </div>
+        )}
+
+        {samplePreview && filePreviewType === "pdf" && (
+          <div className="mt-4">
+            <h3 className="text-lg font-medium">Preview of Selected PDF:</h3>
+            <embed src={samplePreview} type="application/pdf" width="600" height="400" />
+          </div>
+        )}
+
+        {!samplePreview && studentFile && filePreviewType === null && (
+          <div className="mt-4">
+            <p>
+              Selected File: <strong>{studentFile.name}</strong><br />
+              (Preview not available for this file type)
+            </p>
+          </div>
+        )}
+
+        <button
+          onClick={handleSubmit}
+          className="mt-4 bg-green-600 text-white px-4 py-2 rounded"
+        >
+          Submit
+        </button>
       </div>
 
-      <button
-        onClick={handleSubmit}
-        className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-      >
-        Submit
-      </button>
+
 
       <div className="mt-6">
         <button
