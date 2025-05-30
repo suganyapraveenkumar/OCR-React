@@ -1,19 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import './Home.css';
 
 const StudentHome = () => {
   const location = useLocation();
-  const userId = location.state?.userId || "";
   const navigate = useNavigate();
+  const userId = location.state?.userId || "";
 
   const [student, setStudent] = useState({});
   const [category, setCategory] = useState('');
   const [subject, setSubject] = useState('');
-  const [modelFile, setModelFile] = useState(null);
   const [studentFile, setStudentFile] = useState(null);
+  const [samplePreview, setSamplePreview] = useState(null);
+  const [filePreviewType, setFilePreviewType] = useState(null);
 
-  // These should match your DB Subject/Category names exactly
   const categories = [
     { id: 1, name: "Homework" },
     { id: 2, name: "Class Test" },
@@ -33,23 +34,36 @@ const StudentHome = () => {
   useEffect(() => {
     if (userId) {
       fetch(`http://localhost:5000/api/Student/GetStudentProfile/${userId}`)
-        .then((res) => res.json())
-        .then((data) => setStudent(data))
-        .catch((err) => console.error('Error fetching student profile:', err));
+        .then(res => res.json())
+        .then(data => setStudent(data))
+        .catch(err => console.error('Error fetching student profile:', err));
     }
   }, [userId]);
 
-  const handleStudentFileChange = (e) => {
-    setStudentFile(e.target.files[0]);
-  };
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    setStudentFile(file);
+    setSamplePreview(null);
+    setFilePreviewType(null);
 
-  const handleModelFileChange = (e) => {
-    setModelFile(e.target.files[0]);
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      if (file.type.startsWith("image/")) {
+        setSamplePreview(reader.result);
+        setFilePreviewType("image");
+      } else if (file.type === "application/pdf") {
+        setSamplePreview(reader.result);
+        setFilePreviewType("pdf");
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleSubmit = async () => {
-    if (!studentFile || !modelFile || !subject || !category) {
-      alert('Please select subject, category, and upload both files.');
+    if (!studentFile || !subject || !category) {
+      alert('Please select subject, category, and upload a file.');
       return;
     }
 
@@ -62,25 +76,23 @@ const StudentHome = () => {
     }
 
     const formData = new FormData();
-    formData.append("studentFile", studentFile);
-    formData.append("modelFile", modelFile);
+    formData.append("studentId", userId);
+    formData.append("subjectId", subjectId);
+    formData.append("categoryId", categoryId);
+    formData.append("file", studentFile);
 
     try {
-      const response = await axios.post(
-        `http://localhost:5000/api/upload/evaluate?studentId=${userId}&subjectId=${subjectId}&categoryId=${categoryId}`,
+      await axios.post(
+        "http://localhost:5000/api/student/upload",
         formData,
-        {
-          headers: {
-            'Content-Type': 'multipart/form-data'
-          }
-        }
+        { headers: { 'Content-Type': 'multipart/form-data' } }
       );
-
-      alert('Evaluation successful!');
+      alert('Upload successful!');
       setStudentFile(null);
-      setModelFile(null);
       setCategory('');
       setSubject('');
+      setSamplePreview(null);
+      setFilePreviewType(null);
     } catch (error) {
       console.error('Upload error:', error);
       alert('Evaluation failed.');
@@ -88,70 +100,90 @@ const StudentHome = () => {
   };
 
   return (
-    <div className="max-w-3xl mx-auto mt-8 p-6 shadow-lg rounded-lg bg-white">
-      <div className="bg-white shadow-md rounded p-4 mb-6">
-        <h3 className="text-lg font-medium mb-2">Profile Details</h3>
-        <div><strong>Roll No:</strong> {student.studentId}</div>
-        <div><strong>Name:</strong> {student.studentName}</div>
-        <div><strong>Class:</strong> {student.class}</div>
-        <div><strong>Section:</strong> {student.section}</div>
-        <div><strong>Address:</strong> {student.address}</div>
-      </div>
+    <div className="home-page">
+      <div className="home-container">
+        <h3 className="section-title">Student Dashboard</h3>
 
-      <h3 className="text-xl font-semibold mt-6 mb-2">Upload Answer Sheet</h3>
+        <div className="profile-box">
+          <h4 className="section-title">Profile Info</h4>
+          <div><strong>Roll No:</strong> {student.StudentId}</div>
+          <div><strong>Name:</strong> {student.StudentName}</div>
+          <div><strong>Class:</strong> {student.class}</div>
+          <div><strong>Section:</strong> {student.Section}</div>
+          <div><strong>Address:</strong> {student.address}</div>
+        </div>
 
-      <div className="mb-4">
-        <label className="block mb-1">Category:</label>
-        <select
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          className="border px-3 py-2 w-full"
-        >
-          <option value="">-- Select Category --</option>
-          {categories.map((cat) => (
-            <option key={cat.id} value={cat.name}>{cat.name}</option>
-          ))}
-        </select>
-      </div>
+        <div className="form-group">
+          <label className="form-label">Category:</label>
+          <select
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            className="form-select"
+          >
+            <option value="">-- Select Category --</option>
+            {categories.map((cat) => (
+              <option key={cat.id} value={cat.name}>{cat.name}</option>
+            ))}
+          </select>
+        </div>
 
-      <div className="mb-4">
-        <label className="block mb-1">Subject:</label>
-        <select
-          value={subject}
-          onChange={(e) => setSubject(e.target.value)}
-          className="border px-3 py-2 w-full"
-        >
-          <option value="">-- Select Subject --</option>
-          {subjects.map((subj) => (
-            <option key={subj.id} value={subj.name}>{subj.name}</option>
-          ))}
-        </select>
-      </div>
+        <div className="form-group">
+          <label className="form-label">Subject:</label>
+          <select
+            value={subject}
+            onChange={(e) => setSubject(e.target.value)}
+            className="form-select"
+          >
+            <option value="">-- Select Subject --</option>
+            {subjects.map((subj) => (
+              <option key={subj.id} value={subj.name}>{subj.name}</option>
+            ))}
+          </select>
+        </div>
 
-      <div className="mb-4">
-        <label className="block mb-1">Upload Student Answer File (PDF/Doc):</label>
-        <input type="file" onChange={handleStudentFileChange} className="border px-3 py-2 w-full" />
-      </div>
+        <div className="form-group">
+          <label className="form-label">Upload Answer File (PDF/Image):</label>
+          <input
+            type="file"
+            onChange={handleFileChange}
+            className="file-input"
+          />
+        </div>
 
-      <div className="mb-4">
-        <label className="block mb-1">Upload Model Answer File:</label>
-        <input type="file" onChange={handleModelFileChange} className="border px-3 py-2 w-full" />
-      </div>
+        <div className="preview-section">
+          {samplePreview && filePreviewType === "image" && (
+            <div className="preview-block">
+              <h4 className="section-title">Image Preview</h4>
+              <img src={samplePreview} alt="Preview" className="preview-image" />
+            </div>
+          )}
 
-      <button
-        onClick={handleSubmit}
-        className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-      >
-        Submit
-      </button>
+          {samplePreview && filePreviewType === "pdf" && (
+            <div className="preview-block">
+              <h4 className="section-title">PDF Preview</h4>
+              <embed src={samplePreview} type="application/pdf" className="pdf-preview" />
+            </div>
+          )}
 
-      <div className="mt-6">
-        <button
-          onClick={() => navigate(`/Result/${userId}`)}
-          className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
-        >
-          View Result
-        </button>
+          {!samplePreview && studentFile && filePreviewType === null && (
+            <div className="preview-block">
+              <p>
+                Selected File: <strong>{studentFile.name}</strong><br />
+                (Preview not available for this file type)
+              </p>
+            </div>
+          )}
+
+          <button onClick={handleSubmit} className="btn btn-submit">
+            Submit
+          </button>
+        </div>
+
+        <div className="result-button">
+          <button onClick={() => navigate(`/Result/${userId}`)} className="btn">
+            View Result
+          </button>
+        </div>
       </div>
     </div>
   );
